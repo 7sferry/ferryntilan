@@ -5,11 +5,6 @@ package org.example.tools;
  * on November 2025     *
  ************************/
 
-import de.huxhorn.sulky.ulid.ULID;
-
-import java.net.Inet6Address;
-import java.net.UnknownHostException;
-import java.security.SecureRandom;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -33,7 +28,7 @@ public class CrockfordBase32 {
 		DECODE_MAP = Collections.unmodifiableMap(map);
 	}
 
-	public static String encodeWithPadding(long timestamp) {
+	public static String encodeTimestamp(long timestamp) {
 		char[] out = new char[10];
 
 		// 48-bit timestamp → 10 chars
@@ -139,56 +134,42 @@ public class CrockfordBase32 {
 	}
 
 	public static long decodeNumber(String encoded) {
-		if (encoded == null || encoded.isEmpty()) {
-			throw new IllegalArgumentException("Encoded string cannot be null or empty.");
+		if (encoded == null || encoded.isEmpty() || encoded.length() > 13) {
+			throw new IllegalArgumentException("invalid string " + encoded);
 		}
 
+		return decodeNumberInternal(encoded);
+	}
+
+	public static long decodeTimestamp(String encoded) {
+		if (encoded == null || encoded.isEmpty() || encoded.length() > 10) {
+			throw new IllegalArgumentException("invalid string " + encoded);
+		}
+
+		return decodeNumberInternal(encoded);
+	}
+
+	private static long decodeNumberInternal(String encoded){
 		long result = 0;
 
 		for (int i = 0; i < encoded.length(); i++) {
 			char c = encoded.charAt(i);
 
-			// 1. Check if the character is in our lookup map
-			Integer value = DECODE_MAP.get(c);
+			Integer value = DECODE_MAP.get(Character.toUpperCase(c));
 
 			if (value == null) {
-				// To handle case-insensitivity, you could try DECODE_MAP.get(Character.toUpperCase(c))
-				// here, but for strictness, we'll throw an error.
 				throw new IllegalArgumentException("Invalid character in encoded string: " + c);
 			}
 
-			// 2. Shift the running result by 5 bits to the left
+			// Shift the running result by 5 bits to the left
 			// This prepares space for the new 5-bit value.
 			result <<= 5;
 
-			// 3. Add the character's 5-bit value to the result using bitwise OR
+			// Add the character's 5-bit value to the result using bitwise OR
 			result |= value;
-
-			// Optional Safety Check (highly recommended for production code):
-			// Check for overflow before the next shift/add. A full 64-bit
-			// long can only hold 13 Base32 characters. If the length exceeds 13
-			// and the value is large, an overflow can occur.
-			// We skip the explicit overflow check here for simplicity,
-			// trusting the input was created by the corresponding encode function.
 		}
 
 		return result;
 	}
 
-	// Example usage
-	static void main(String[] args) throws UnknownHostException{
-		System.out.println(Integer.toHexString(10));
-		ULID ulid = new ULID();
-		SecureRandom random = new SecureRandom();
-		byte[] bytes = new byte[6];
-		System.out.println("ulid.nextULID() = " + ulid.nextULID());
-//		ByteBuffer allocate = ByteBuffer.allocate(16);
-//		allocate.putLong(System.currentTimeMillis());
-		random.nextBytes(bytes);
-//		allocate.put(bytes);
-		System.out.println("System.currentTimeMillis() = " + System.currentTimeMillis());
-		System.out.println("base32.encodeToString(allocate.array()) = " + encode(bytes));
-		System.out.println("base32.decode(base32.encodeToString(allocate.array())) = " + encodeNumber(Inet6Address.getLocalHost().getHostName().hashCode()));
-		System.out.println(Integer.toHexString(Inet6Address.getLocalHost().getHostAddress().hashCode()));
-	}
 }
