@@ -10,29 +10,30 @@ import de.huxhorn.sulky.ulid.ULID;
 import java.net.Inet6Address;
 import java.net.UnknownHostException;
 import java.security.SecureRandom;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
 public class CrockfordBase32 {
 	private static final String ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-	private static final Map<Character, Integer> DECODE_MAP = new HashMap<>();
+	private static final Map<Character, Integer> DECODE_MAP;
 
 	static {
-		// Build character to value mapping
+		Map<Character, Integer> map = new HashMap<>();
 		for (int i = 0; i < ALPHABET.length(); i++) {
-			DECODE_MAP.put(ALPHABET.charAt(i), i);
+			map.put(ALPHABET.charAt(i), i);
 		}
 
-		// Add common confusion mappings
-		DECODE_MAP.put('O', 0);
-		DECODE_MAP.put('o', 0);
-		DECODE_MAP.put('I', 1);
-		DECODE_MAP.put('i', 1);
-		DECODE_MAP.put('L', 1);
-		DECODE_MAP.put('l', 1);
+		map.put('O', 0);
+		map.put('o', 0);
+		map.put('I', 1);
+		map.put('i', 1);
+		map.put('L', 1);
+		map.put('l', 1);
+		DECODE_MAP = Collections.unmodifiableMap(map);
 	}
 
-	public static String encodeTimestamp(long timestamp) {
+	public static String encodeWithPadding(long timestamp) {
 		char[] out = new char[10];
 
 		// 48-bit timestamp → 10 chars
@@ -117,7 +118,7 @@ public class CrockfordBase32 {
 		return result;
 	}
 
-	public static String encode(long value) {
+	public static String encodeNumber(long value) {
 		if (value < 0) {
 			throw new IllegalArgumentException("Value must be non-negative");
 		}
@@ -137,6 +138,43 @@ public class CrockfordBase32 {
 		return new String(buffer, pos, buffer.length - pos);
 	}
 
+	public static long decodeNumber(String encoded) {
+		if (encoded == null || encoded.isEmpty()) {
+			throw new IllegalArgumentException("Encoded string cannot be null or empty.");
+		}
+
+		long result = 0;
+
+		for (int i = 0; i < encoded.length(); i++) {
+			char c = encoded.charAt(i);
+
+			// 1. Check if the character is in our lookup map
+			Integer value = DECODE_MAP.get(c);
+
+			if (value == null) {
+				// To handle case-insensitivity, you could try DECODE_MAP.get(Character.toUpperCase(c))
+				// here, but for strictness, we'll throw an error.
+				throw new IllegalArgumentException("Invalid character in encoded string: " + c);
+			}
+
+			// 2. Shift the running result by 5 bits to the left
+			// This prepares space for the new 5-bit value.
+			result <<= 5;
+
+			// 3. Add the character's 5-bit value to the result using bitwise OR
+			result |= value;
+
+			// Optional Safety Check (highly recommended for production code):
+			// Check for overflow before the next shift/add. A full 64-bit
+			// long can only hold 13 Base32 characters. If the length exceeds 13
+			// and the value is large, an overflow can occur.
+			// We skip the explicit overflow check here for simplicity,
+			// trusting the input was created by the corresponding encode function.
+		}
+
+		return result;
+	}
+
 	// Example usage
 	static void main(String[] args) throws UnknownHostException{
 		System.out.println(Integer.toHexString(10));
@@ -150,7 +188,7 @@ public class CrockfordBase32 {
 //		allocate.put(bytes);
 		System.out.println("System.currentTimeMillis() = " + System.currentTimeMillis());
 		System.out.println("base32.encodeToString(allocate.array()) = " + encode(bytes));
-		System.out.println("base32.decode(base32.encodeToString(allocate.array())) = " + encode(Inet6Address.getLocalHost().getHostName().hashCode()));
+		System.out.println("base32.decode(base32.encodeToString(allocate.array())) = " + encodeNumber(Inet6Address.getLocalHost().getHostName().hashCode()));
 		System.out.println(Integer.toHexString(Inet6Address.getLocalHost().getHostAddress().hashCode()));
 	}
 }
